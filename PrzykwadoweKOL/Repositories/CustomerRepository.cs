@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using PrzykwadoweKOL.DTOs;
+using PrzykwadoweKOL.Exceptions;
 
 
 namespace PrzykwadoweKOL.Repositories;
@@ -104,7 +105,8 @@ public class CustomerRepository : ICustomerRepository
         int customerExist = (int)await checkCmd.ExecuteScalarAsync();
         if (customerExist == 0)
         {
-            throw new Exception("Customer not found");
+            // Używamy naszego własnego błędu!
+            throw new NotFoundException($"Klient o ID {customerId} nie istnieje w bazie.");
         }
 
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
@@ -132,7 +134,7 @@ Values (@Date ,@CostId, 1)
 
                 if (movieIdResult == null)
                 {
-                    throw new Exception($"Movie {movie.title} not found");
+                    throw new NotFoundException($"Film o tytule '{movie.title}' nie został znaleziony.");
                 }
 
                 int movieId = (int)movieIdResult;

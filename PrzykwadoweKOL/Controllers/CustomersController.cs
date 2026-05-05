@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using PrzykwadoweKOL.DTOs;
+using PrzykwadoweKOL.Exceptions;
 using PrzykwadoweKOL.Repositories;
 
 namespace PrzykwadoweKOL.Controllers;
 
 [ApiController]
-[Route("api/customers")] 
+[Route("api/customers")]
 public class CustomersController : ControllerBase
 {
     private readonly ICustomerRepository _repository;
@@ -17,7 +18,7 @@ public class CustomersController : ControllerBase
     }
 
     // 1. ZADANIE GET: api/customers/{id}/rentals
-    [HttpGet("{id:int}/rentals")] 
+    [HttpGet("{id:int}/rentals")]
     public async Task<IActionResult> GetCustomerRentals(int id)
     {
         // Prosimy kucharza o dane
@@ -35,7 +36,8 @@ public class CustomersController : ControllerBase
 
     // 2. ZADANIE POST: api/customers/{id}/rentals
     [HttpPost("{id:int}/rentals")]
-    public async Task<IActionResult> AddRental(int id, [FromBody] CreateRentalRequestDTO request)  {
+    public async Task<IActionResult> AddRental(int id, [FromBody] CreateRentalRequestDTO request)
+    {
         try
         {
             // Przesyłamy zamówienie do kucharza. On zajmie się transakcją w bazie.
@@ -44,11 +46,23 @@ public class CustomersController : ControllerBase
             // Informujemy klienta, pod jakim numerem (ID) jest jego nowe wypożyczenie
             return Created($"api/customers/{id}/rentals/{newRentalId}", new { Id = newRentalId });
         }
+        catch (NotFoundException ex)
+        {
+            // Kucharz nie znalazł klienta lub filmu! 
+            // Zwracamy piękny kod 404 (Not Found)
+            return NotFound(ex.Message);
+        }
+        catch (BadRequestException ex)
+        {
+            // Klient zepsuł żądanie (np. zła cena)
+            // Zwracamy kod 400 (Bad Request)
+            return BadRequest(ex.Message);
+        }
         catch (Exception ex)
         {
-            // Jeśli kucharz zgłosił błąd (np. klient lub film nie istnieje), zwracamy 400 Bad Request [cite: 264]
-            // Wyświetlamy klientowi treść błędu, którą przygotowaliśmy w Repozytorium
-            return BadRequest(ex.Message);
+            // Zwykły Exception łapie tu już TYLKO błędy krytyczne (np. padła baza danych)
+            // Zwracamy kod 500 (Internal Server Error)
+            return StatusCode(500, "Wystąpił nieoczekiwany błąd serwera. Spróbuj ponownie później.");
         }
     }
 }
