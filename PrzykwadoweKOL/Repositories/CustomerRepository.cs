@@ -145,10 +145,8 @@ Values (@Date ,@CostId, 1)
                 insertItemCmd.Parameters.AddWithValue("@RentalId", newRentalId);
                 insertItemCmd.Parameters.AddWithValue("@MovieId", movieId);
                 insertItemCmd.Parameters.AddWithValue("@Price", movie.rentalPrice);
-
                 await insertItemCmd.ExecuteNonQueryAsync();
             }
-
             await transaction.CommitAsync();
             return newRentalId;
         }
@@ -157,7 +155,47 @@ Values (@Date ,@CostId, 1)
             await transaction.RollbackAsync();
             throw new Exception(ex.Message);
         }
-
     }
+
+    public async Task<ReturnRentalStatus> UpdateReturnRentalRequestAsync(int rentalId)
+    {
+        var currentDate = DateTime.Now;
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        var checkSql = """
+                       SELECT return_date FROM Rental WHERE rental_id = @RentalId
+                       """;
+        await using var checkCmd = new SqlCommand(checkSql, conn);
+        checkCmd.Parameters.AddWithValue("@RentalId", rentalId);
+        var resultCheck = await checkCmd.ExecuteScalarAsync();
+
+        // 1. Jeśli null, to w ogóle nie ma takiego wypożyczenia
+        if (resultCheck == null)
+        {
+            return ReturnRentalStatus.NotFound;
+        }
+
+        // 2. Jeśli wynik to NIE JEST DBNull.Value, to znaczy, że jest tam już jakaś data (już oddano)
+        if (resultCheck != DBNull.Value)
+        {
+            return ReturnRentalStatus.AlreadyReturned;
+        }
     
+        // 3. Jeśli przeszliśmy przez powyższe ify, to znaczy, że resultCheck == DBNull.Value
+        // i możemy spokojnie robić UPDATE.
+        var sql = """
+                  UPDATE Rental SET return_date = @ReturnDate, 
+                  status_id = (SELECT status_id FROM Status WHERE name = 'Returned')
+                  WHERE rental_id = @RentalId
+                  """;
+              
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@ReturnDate", currentDate);
+        cmd.Parameters.AddWithValue("@RentalId", rentalId);
+    
+        await cmd.ExecuteNonQueryAsync();
+    
+        return ReturnRentalStatus.Success;
+    }
 }

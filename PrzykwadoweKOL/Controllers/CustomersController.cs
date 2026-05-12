@@ -65,4 +65,23 @@ public class CustomersController : ControllerBase
             return StatusCode(500, "Wystąpił nieoczekiwany błąd serwera. Spróbuj ponownie później.");
         }
     }
+
+    [HttpPut("{id:int}/return")]
+    public async Task<IActionResult> UpdateRental(int id, [FromBody] ReturnRentalRequest request)
+    {
+        ReturnRentalStatus status = await _repository.UpdateReturnRentalRequestAsync(id);
+
+        switch (status)
+        {
+            case ReturnRentalStatus.NotFound:
+                return NotFound($"Nie znaleziono wypożyczenia o ID: {id}");
+            case ReturnRentalStatus.AlreadyReturned:
+                return BadRequest($"Wypożyczenie o ID: {id} zostało już wcześniej zwrócone.");
+            case ReturnRentalStatus.Success:
+                return NoContent();
+            default:
+                return StatusCode(500, "Wystąpił nieoczekiwany błąd serwera.");
+        }
+    }
+
 }
