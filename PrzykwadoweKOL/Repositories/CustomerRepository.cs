@@ -13,7 +13,7 @@ public class CustomerRepository : ICustomerRepository
     {
         _connectionString = configuration.GetConnectionString("DefaultConnection");
     }
-
+    
     public async Task<CustomerRentalDTO> GetCustomerWithRentalsAsync(int customerId)
     {
         await using var connection = new SqlConnection(_connectionString);
@@ -198,4 +198,55 @@ Values (@Date ,@CostId, 1)
     
         return ReturnRentalStatus.Success;
     }
+
+    //DELETE
+   public async Task<ReturnRentalStatus> DeleteRentalAsync(int rentalId)
+{
+    await using var conn = new SqlConnection(_connectionString);
+    await conn.OpenAsync(); 
+    
+    // Sprawdzenie czy rent istnieje
+    var rentSqlCheck = "SELECT Count(1) FROM Rental WHERE rental_id = @RentId";
+    await using var rentCheckCmd = new SqlCommand(rentSqlCheck, conn);
+    rentCheckCmd.Parameters.AddWithValue("@RentId", rentalId);
+    
+    int rentCount = (int)await rentCheckCmd.ExecuteScalarAsync();
+    if (rentCount == 0)
+    {
+        return ReturnRentalStatus.NotFound;
+    }
+    await using var transaction = (SqlTransaction)await conn.BeginTransactionAsync();
+    
+    try
+    {
+        // 1. Usuwamy dzieci (Rental_Item)
+        var rentalDeleteKidsSql = "DELETE FROM Rental_Item WHERE rental_id = @RentId";
+        await using var rentalDeleteKidsCmd = new SqlCommand(rentalDeleteKidsSql, conn, transaction);
+        rentalDeleteKidsCmd.Parameters.AddWithValue("@RentId", rentalId);
+        await rentalDeleteKidsCmd.ExecuteNonQueryAsync();
+        
+        // 2. Usuwamy rodzica (Rental)
+        var rentalDeleteParentsSql = "DELETE FROM Rental WHERE rental_id = @RentId";
+        await using var rentalDeleteParentsCmd = new SqlCommand(rentalDeleteParentsSql, conn, transaction);
+        rentalDeleteParentsCmd.Parameters.AddWithValue("@RentId", rentalId);
+        await rentalDeleteParentsCmd.ExecuteNonQueryAsync();
+        
+        await transaction.CommitAsync();
+        return ReturnRentalStatus.Success;
+    }
+    catch (SqlException ex) // Łapiemy konkretny błąd SQL (np. zerwane połączenie)
+    {
+        await transaction.RollbackAsync();
+        
+        // Rzucamy NASZ wyjątek, ale przekazujemy 'ex' do środka. 
+        // Dzięki temu wiemy, że to błąd naszej domeny, ale w logach nadal zobaczymy 
+        // dokładny błąd z bazy danych.
+        throw new DatabaseOperationException("Wystąpił błąd bazy danych podczas próby usunięcia wypożyczenia.", ex);
+    }
+    catch (Exception ex) // Łapiemy wszystkie inne nieprzewidziane błędy jako zabezpieczenie
+    {
+        await transaction.RollbackAsync();
+        throw new DatabaseOperationException("Wystąpił nieoczekiwany błąd podczas usuwania wypożyczenia.", ex);
+    }
+}
 }

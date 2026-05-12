@@ -83,5 +83,22 @@ public class CustomersController : ControllerBase
                 return StatusCode(500, "Wystąpił nieoczekiwany błąd serwera.");
         }
     }
+    
+    [HttpDelete("{id:int}/rentals")]
+    public async Task<IActionResult> DeleteRental(int id)
+    {
+        var success = await _repository.DeleteRentalAsync(id);
+        
+        switch (success)
+        {
+            case ReturnRentalStatus.NotFound:
+                return NotFound($"Nie znaleziono wypożyczenia o ID: {id}");
+            case ReturnRentalStatus.Success:
+                return NoContent();
+            default:
+                return StatusCode(500, "Wystąpił nieoczekiwany błąd serwera.");
+            
+        }
+    }
 
 }
